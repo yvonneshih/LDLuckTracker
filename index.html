@@ -13,10 +13,8 @@
     }
     table { width: 100%; margin-top: 1rem; border-collapse: collapse; background: #fff; }
     th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; font-size: 0.9rem; }
-    .charts { display: flex; flex-direction: column; gap: 2rem; margin-top: 2rem; }
+    .charts { margin-top: 2rem; }
     canvas { background: #fff; border: 1px solid #ddd; padding: 0.5rem; border-radius: 8px; max-width: 100%; }
-    .chart-container { text-align: center; }
-    .chart-controls { display: flex; justify-content: center; gap: 0.5rem; margin: 0.5rem 0; flex-wrap: wrap; }
     #luckSummary { margin-top: 2rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; }
   </style>
 </head>
@@ -52,10 +50,10 @@
   <input type="number" id="tickets" min="1" placeholder="Tickets Used" required />
   <input type="date" id="drawDate" />
   <textarea id="memo" placeholder="Memo (optional)"></textarea>
-  <button type="submit">Add Record</button>
+  <button type="submit" id="submitBtn">Add Record</button>
 </form>
 <div>
-  <button onclick="clearData()">🧼 Clear All Data</button>
+  <button onclick="clearData()" id="clearBtn">🧼 Clear All Data</button>
 </div>
 <table>
   <thead>
@@ -65,14 +63,8 @@
 </table>
 <div id="luckSummary"></div>
 <div class="charts">
-  <div class="chart-container">
-    <h3 id="drawsCharTitle">Draws per Character</h3>
-    <canvas id="charChart"></canvas>
-  </div>
-  <div class="chart-container">
-    <h3 id="drawsEventTitle">Draws for Event 5★</h3>
-    <canvas id="eventChart"></canvas>
-  </div>
+  <h3 id="stackedTitle">Draw Results per Character</h3>
+  <canvas id="stackedChart"></canvas>
 </div>
 <script>
 let history = JSON.parse(localStorage.getItem("gachaHistory") || "[]");
@@ -82,13 +74,15 @@ const charts = {};
 const translations = {
   en: {
     title: "🎟️ Love & Deepspace – Gacha Tracker",
-    drawsChar: "Draws per Character",
-    drawsEvent: "Draws for Event 5★"
+    submit: "Add Record",
+    clear: "🧼 Clear All Data",
+    stacked: "Draw Results per Character"
   },
   zh: {
     title: "🎟️ 恋与深空 – 抽卡记录器",
-    drawsChar: "每位角色抽卡总数",
-    drawsEvent: "每位角色活动卡抽卡数"
+    submit: "添加记录",
+    clear: "🧼 清除所有数据",
+    stacked: "每个角色的抽卡结果"
   }
 };
 
@@ -96,8 +90,9 @@ document.getElementById("langSelect").addEventListener("change", e => {
   const lang = e.target.value;
   const t = translations[lang];
   document.getElementById("title").textContent = t.title;
-  document.getElementById("drawsCharTitle").textContent = t.drawsChar;
-  document.getElementById("drawsEventTitle").textContent = t.drawsEvent;
+  document.getElementById("submitBtn").textContent = t.submit;
+  document.getElementById("clearBtn").textContent = t.clear;
+  document.getElementById("stackedTitle").textContent = t.stacked;
 });
 
 function addRow(r) {
@@ -138,38 +133,54 @@ function clearData() {
   }
 }
 
-function getSumByCharacter(filter) {
-  const map = {};
-  history.forEach(r => {
-    if (!filter || filter(r)) {
-      map[r.character] = (map[r.character] || 0) + r.tickets;
-    }
+function updateCharts() {
+  const labels = [...new Set(history.map(r => r.character))];
+  const event = {}, normal = {}, none = {};
+  labels.forEach(name => {
+    event[name] = 0;
+    normal[name] = 0;
+    none[name] = 0;
   });
-  return map;
-}
 
-function drawChart(id, dataMap) {
-  const ctx = document.getElementById(id).getContext("2d");
-  const labels = Object.keys(dataMap);
-  const data = Object.values(dataMap);
-  if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart(ctx, {
+  history.forEach(r => {
+    if (r.result === "event") event[r.character] += r.tickets;
+    else if (r.result === "normal") normal[r.character] += r.tickets;
+    else none[r.character] += r.tickets;
+  });
+
+  const ctx = document.getElementById("stackedChart").getContext("2d");
+  if (charts["stackedChart"]) charts["stackedChart"].destroy();
+  charts["stackedChart"] = new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: 'Draws',
-        data,
-        backgroundColor: '#76b5c5'
-      }]
+      datasets: [
+        {
+          label: "Event 5★",
+          backgroundColor: "#4caf50",
+          data: labels.map(l => event[l])
+        },
+        {
+          label: "Normal 5★",
+          backgroundColor: "#2196f3",
+          data: labels.map(l => normal[l])
+        },
+        {
+          label: "No 5★",
+          backgroundColor: "#f44336",
+          data: labels.map(l => none[l])
+        }
+      ]
     },
-    options: { responsive: true }
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true }
+      }
+    }
   });
-}
-
-function updateCharts() {
-  drawChart("charChart", getSumByCharacter());
-  drawChart("eventChart", getSumByCharacter(r => r.result === "event"));
 }
 
 function updateLuckSummary() {
