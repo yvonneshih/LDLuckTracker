@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Love & Deepspace - Gacha Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: Arial, sans-serif; background: #f9f9f9; padding: 1rem; }
     h1 { text-align: center; }
@@ -12,11 +13,20 @@
     }
     table { width: 100%; margin-top: 1rem; border-collapse: collapse; background: #fff; }
     th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; font-size: 0.9rem; }
-    #summaryContainer, #luckSummary { margin-top: 2rem; padding: 1rem; background: #e8f4ff; border-radius: 8px; }
+    .charts { display: flex; flex-direction: column; gap: 2rem; margin-top: 2rem; }
+    canvas { background: #fff; border: 1px solid #ddd; padding: 0.5rem; border-radius: 8px; max-width: 100%; }
+    .chart-container { text-align: center; }
+    .chart-controls { display: flex; justify-content: center; gap: 0.5rem; margin: 0.5rem 0; flex-wrap: wrap; }
+    #luckSummary { margin-top: 2rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; }
   </style>
 </head>
 <body>
-<h1>🎟️ Love & Deepspace – Gacha Tracker</h1>
+<h1 id="title">🎟️ Love & Deepspace – Gacha Tracker</h1>
+<label for="langSelect">🌐 Language / 语言:</label>
+<select id="langSelect">
+  <option value="en">English</option>
+  <option value="zh">中文</option>
+</select>
 <form id="gachaForm">
   <select id="character" required>
     <option value="">Select Character</option>
@@ -53,11 +63,42 @@
   </thead>
   <tbody id="history"></tbody>
 </table>
-<div id="summaryContainer"></div>
 <div id="luckSummary"></div>
+<div class="charts">
+  <div class="chart-container">
+    <h3 id="drawsCharTitle">Draws per Character</h3>
+    <canvas id="charChart"></canvas>
+  </div>
+  <div class="chart-container">
+    <h3 id="drawsEventTitle">Draws for Event 5★</h3>
+    <canvas id="eventChart"></canvas>
+  </div>
+</div>
 <script>
 let history = JSON.parse(localStorage.getItem("gachaHistory") || "[]");
 const table = document.getElementById("history");
+const charts = {};
+
+const translations = {
+  en: {
+    title: "🎟️ Love & Deepspace – Gacha Tracker",
+    drawsChar: "Draws per Character",
+    drawsEvent: "Draws for Event 5★"
+  },
+  zh: {
+    title: "🎟️ 恋与深空 – 抽卡记录器",
+    drawsChar: "每位角色抽卡总数",
+    drawsEvent: "每位角色活动卡抽卡数"
+  }
+};
+
+document.getElementById("langSelect").addEventListener("change", e => {
+  const lang = e.target.value;
+  const t = translations[lang];
+  document.getElementById("title").textContent = t.title;
+  document.getElementById("drawsCharTitle").textContent = t.drawsChar;
+  document.getElementById("drawsEventTitle").textContent = t.drawsEvent;
+});
 
 function addRow(r) {
   const tr = document.createElement("tr");
@@ -82,7 +123,7 @@ document.getElementById("gachaForm").addEventListener("submit", e => {
   history.push(record);
   localStorage.setItem("gachaHistory", JSON.stringify(history));
   addRow(record);
-  updateSummary();
+  updateCharts();
   updateLuckSummary();
   e.target.reset();
 });
@@ -92,29 +133,43 @@ function clearData() {
     localStorage.removeItem("gachaHistory");
     history = [];
     table.innerHTML = "";
-    updateSummary();
+    updateCharts();
     updateLuckSummary();
   }
 }
 
-function updateSummary() {
-  const drawByCharacter = {};
-  const drawByEvent = {};
-  for (const r of history) {
-    drawByCharacter[r.character] = (drawByCharacter[r.character] || 0) + r.tickets;
-    if (r.result === "event") {
-      drawByEvent[r.character] = (drawByEvent[r.character] || 0) + r.tickets;
+function getSumByCharacter(filter) {
+  const map = {};
+  history.forEach(r => {
+    if (!filter || filter(r)) {
+      map[r.character] = (map[r.character] || 0) + r.tickets;
     }
-  }
+  });
+  return map;
+}
 
-  const html = `
-    <h3>📊 Summary</h3>
-    <h4>Total Draws per Character:</h4>
-    <ul>${Object.entries(drawByCharacter).map(([k, v]) => `<li>${k}: ${v} draws</li>`).join("")}</ul>
-    <h4>Total Draws for Event 5★ per Character:</h4>
-    <ul>${Object.entries(drawByEvent).map(([k, v]) => `<li>${k}: ${v} draws</li>`).join("")}</ul>
-  `;
-  document.getElementById("summaryContainer").innerHTML = html;
+function drawChart(id, dataMap) {
+  const ctx = document.getElementById(id).getContext("2d");
+  const labels = Object.keys(dataMap);
+  const data = Object.values(dataMap);
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Draws',
+        data,
+        backgroundColor: '#76b5c5'
+      }]
+    },
+    options: { responsive: true }
+  });
+}
+
+function updateCharts() {
+  drawChart("charChart", getSumByCharacter());
+  drawChart("eventChart", getSumByCharacter(r => r.result === "event"));
 }
 
 function updateLuckSummary() {
@@ -145,7 +200,7 @@ function updateLuckSummary() {
     <ul>${luckRatings.map(l => `<li>${l}</li>`).join('')}</ul>`;
 }
 
-updateSummary();
+updateCharts();
 updateLuckSummary();
 </script>
 </body>
