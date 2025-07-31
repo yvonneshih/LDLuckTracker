@@ -19,12 +19,7 @@
   </style>
 </head>
 <body>
-<h1 id="title">🎟️ Love & Deepspace – Gacha Tracker</h1>
-<label for="langSelect">🌐 Language / 语言:</label>
-<select id="langSelect">
-  <option value="en">English</option>
-  <option value="zh">中文</option>
-</select>
+<h1>🎟️ Love & Deepspace – Gacha Tracker</h1>
 <form id="gachaForm">
   <select id="character" required>
     <option value="">Select Character</option>
@@ -63,37 +58,15 @@
 </table>
 <div id="luckSummary"></div>
 <div class="charts">
-  <h3 id="stackedTitle">Draw Results per Character</h3>
-  <canvas id="stackedChart"></canvas>
+  <h3>Total Draws per Character</h3>
+  <canvas id="totalDrawsChart"></canvas>
+  <h3>5★ Card Results per Character</h3>
+  <canvas id="starChart"></canvas>
 </div>
 <script>
 let history = JSON.parse(localStorage.getItem("gachaHistory") || "[]");
 const table = document.getElementById("history");
 const charts = {};
-
-const translations = {
-  en: {
-    title: "🎟️ Love & Deepspace – Gacha Tracker",
-    submit: "Add Record",
-    clear: "🧼 Clear All Data",
-    stacked: "Draw Results per Character"
-  },
-  zh: {
-    title: "🎟️ 恋与深空 – 抽卡记录器",
-    submit: "添加记录",
-    clear: "🧼 清除所有数据",
-    stacked: "每个角色的抽卡结果"
-  }
-};
-
-document.getElementById("langSelect").addEventListener("change", e => {
-  const lang = e.target.value;
-  const t = translations[lang];
-  document.getElementById("title").textContent = t.title;
-  document.getElementById("submitBtn").textContent = t.submit;
-  document.getElementById("clearBtn").textContent = t.clear;
-  document.getElementById("stackedTitle").textContent = t.stacked;
-});
 
 function addRow(r) {
   const tr = document.createElement("tr");
@@ -135,40 +108,53 @@ function clearData() {
 
 function updateCharts() {
   const labels = [...new Set(history.map(r => r.character))];
-  const event = {}, normal = {}, none = {};
+  const draws = {}, normal = {}, event = {};
   labels.forEach(name => {
-    event[name] = 0;
+    draws[name] = 0;
     normal[name] = 0;
-    none[name] = 0;
+    event[name] = 0;
   });
 
   history.forEach(r => {
-    if (r.result === "event") event[r.character] += r.tickets;
-    else if (r.result === "normal") normal[r.character] += r.tickets;
-    else none[r.character] += r.tickets;
+    draws[r.character] += r.tickets;
+    if (r.result === "normal") normal[r.character] += r.normalCount || 0;
+    if (r.result === "event") event[r.character] += r.eventCount || 0;
   });
 
-  const ctx = document.getElementById("stackedChart").getContext("2d");
-  if (charts["stackedChart"]) charts["stackedChart"].destroy();
-  charts["stackedChart"] = new Chart(ctx, {
+  const totalCtx = document.getElementById("totalDrawsChart").getContext("2d");
+  if (charts["totalDrawsChart"]) charts["totalDrawsChart"].destroy();
+  charts["totalDrawsChart"] = new Chart(totalCtx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: "Total Draws",
+        data: labels.map(l => draws[l]),
+        backgroundColor: "#8884d8"
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  const starCtx = document.getElementById("starChart").getContext("2d");
+  if (charts["starChart"]) charts["starChart"].destroy();
+  charts["starChart"] = new Chart(starCtx, {
     type: 'bar',
     data: {
       labels,
       datasets: [
         {
-          label: "Event 5★",
-          backgroundColor: "#4caf50",
-          data: labels.map(l => event[l])
-        },
-        {
           label: "Normal 5★",
-          backgroundColor: "#2196f3",
-          data: labels.map(l => normal[l])
+          data: labels.map(l => normal[l]),
+          backgroundColor: "#2196f3"
         },
         {
-          label: "No 5★",
-          backgroundColor: "#f44336",
-          data: labels.map(l => none[l])
+          label: "Event 5★",
+          data: labels.map(l => event[l]),
+          backgroundColor: "#f44336"
         }
       ]
     },
@@ -176,8 +162,8 @@ function updateCharts() {
       responsive: true,
       plugins: { legend: { position: 'top' } },
       scales: {
-        x: { stacked: true },
-        y: { stacked: true }
+        x: { stacked: false },
+        y: { beginAtZero: true }
       }
     }
   });
