@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Love & Deepspace - Luck Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 1rem; background: #f5f5f5; }
+    h1 { text-align: center; }
+    select, input, button {
+      padding: 0.5rem; margin: 0.3rem 0; width: 100%; font-size: 1rem;
+    }
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 1rem; background: white;
+    }
+    th, td {
+      border: 1px solid #ccc; padding: 0.5rem; text-align: center;
+    }
+    .result {
+      margin-top: 1rem; padding: 1rem; border: 2px solid #ccc; border-radius: 6px; background: #fff;
+    }
+    .luck { font-weight: bold; font-size: 1.1rem; }
+    .controls { display: flex; gap: 0.5rem; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+
+<h1 id="title">🎟️ Love & Deepspace – Luck Tracker</h1>
+
+<label for="languageSelect" id="langLabel">🌐 Language / 语言:</label>
+<select id="languageSelect">
+  <option value="en">English</option>
+  <option value="zh">中文</option>
+</select>
+
+<form id="gachaForm">
+  <input type="text" id="eventName" placeholder="Event Name" required>
+  <select id="eventCharacter" required>
+    <option value="">Select Event Character</option>
+    <option value="Xavier 沈星回">Xavier 沈星回</option>
+    <option value="Zayne 黎深">Zayne 黎深</option>
+    <option value="Caleb 夏以昼">Caleb 夏以昼</option>
+    <option value="Rafayel 祁煜">Rafayel 祁煜</option>
+    <option value="Sylus 秦彻">Sylus 秦彻</option>
+  </select>
+  <input type="number" id="ticketsUsed" placeholder="Yellow Tickets Used" min="1" required>
+  <select id="cardType" required>
+    <option value="">Got 5★ Card?</option>
+    <option value="event">Yes - Event 5★</option>
+    <option value="normal">Yes - Normal 5★</option>
+    <option value="none">No 5★ Yet</option>
+  </select>
+
+  <select id="normalCharacter" style="display:none;">
+    <option value="">Select Normal 5★ Character</option>
+    <option value="Xavier 沈星回">Xavier 沈星回</option>
+    <option value="Zayne 黎深">Zayne 黎深</option>
+    <option value="Caleb 夏以昼">Caleb 夏以昼</option>
+    <option value="Rafayel 祁煜">Rafayel 祁煜</option>
+    <option value="Sylus 秦彻">Sylus 秦彻</option>
+  </select>
+
+  <input type="date" id="drawDate" placeholder="Optional Date">
+  <button type="submit" id="submitBtn">Analyze & Record</button>
+</form>
+
+<div id="result" class="result" style="display:none;"></div>
+
+<div class="controls">
+  <button onclick="clearHistory()" id="clearBtn">🧼 Clear History</button>
+</div>
+
+<table id="historyTable">
+  <thead>
+    <tr>
+      <th id="thDate">Date</th>
+      <th id="thEvent">Event</th>
+      <th id="thChar">Event Character</th>
+      <th id="thResultChar">Result Character</th>
+      <th id="thTickets">Tickets</th>
+      <th id="thType">Card Type</th>
+      <th id="thLuck">Luck Level</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  const form = document.getElementById('gachaForm');
+  const cardTypeSelect = document.getElementById('cardType');
+  const normalCharSelect = document.getElementById('normalCharacter');
+  const langSelect = document.getElementById('languageSelect');
+  const resultDiv = document.getElementById('result');
+  const tableBody = document.querySelector('#historyTable tbody');
+  const defaultLang = localStorage.getItem('lang') || 'en';
+  let history = JSON.parse(localStorage.getItem('luckHistory') || '[]');
+  let previousWasNormal = false;
+
+  const translations = {
+    en: {
+      title: "🎟️ Love & Deepspace – Luck Tracker",
+      langLabel: "🌐 Language / 语言:",
+      submitBtn: "Analyze & Record",
+      clearBtn: "🧼 Clear History",
+      placeholders: {
+        eventName: "Event Name",
+        tickets: "Yellow Tickets Used"
+      },
+      th: ["Date", "Event", "Event Character", "Result Character", "Tickets", "Card Type", "Luck Level"],
+      cardLabels: {
+        event: "Event 5★",
+        normal: "Normal 5★",
+        none: "None"
+      }
+    },
+    zh: {
+      title: "🎟️ 恋与深空 – 欧气记录器",
+      langLabel: "🌐 语言 / Language:",
+      submitBtn: "分析并记录",
+      clearBtn: "🧼 清除记录",
+      placeholders: {
+        eventName: "活动名称",
+        tickets: "使用黄票数"
+      },
+      th: ["日期", "活动", "活动角色", "结果角色", "票数", "卡类型", "欧气等级"],
+      cardLabels: {
+        event: "活动5星",
+        normal: "常规5星",
+        none: "未出卡"
+      }
+    }
+  };
+
+  function applyLanguage(lang) {
+    const t = translations[lang];
+    document.getElementById('title').textContent = t.title;
+    document.getElementById('langLabel').textContent = t.langLabel;
+    document.getElementById('submitBtn').textContent = t.submitBtn;
+    document.getElementById('clearBtn').textContent = t.clearBtn;
+
+    document.getElementById('eventName').placeholder = t.placeholders.eventName;
+    document.getElementById('ticketsUsed').placeholder = t.placeholders.tickets;
+
+    const ths = document.querySelectorAll('#historyTable thead th');
+    t.th.forEach((txt, idx) => { ths[idx].textContent = txt; });
+  }
+
+  langSelect.value = defaultLang;
+  applyLanguage(defaultLang);
+
+  langSelect.addEventListener("change", () => {
+    const lang = langSelect.value;
+    localStorage.setItem('lang', lang);
+    applyLanguage(lang);
+  });
+
+  cardTypeSelect.addEventListener("change", () => {
+    normalCharSelect.style.display = cardTypeSelect.value === "normal" ? "block" : "none";
+  });
+
+  history.forEach(addToTable);
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const lang = langSelect.value;
+    const t = translations[lang];
+
+    const event = document.getElementById('eventName').value.trim();
+    const eventChar = document.getElementById('eventCharacter').value;
+    const tickets = parseInt(document.getElementById('ticketsUsed').value, 10);
+    const cardType = cardTypeSelect.value;
+    const normalChar = normalCharSelect.value;
+    const date = document.getElementById('drawDate').value || '—';
+
+    let luckLevel = '', luckMessage = '', resultChar = '';
+
+    if (cardType === 'none') {
+      luckMessage = lang === 'zh' ? '还未出卡，继续抽吧～' : 'Still pulling... No 5★ yet.';
+      luckLevel = 'Pending';
+      resultChar = '—';
+    } else if (cardType === 'event') {
+      resultChar = eventChar;
+      if (tickets <= 30) {
+        luckMessage = '🟢 Super Lucky!';
+        luckLevel = lang === 'zh' ? '超级欧皇' : 'Super Lucky';
+      } else if (tickets <= 50) {
+        luckMessage = '💚 Lucky!';
+        luckLevel = lang === 'zh' ? '小欧' : 'Lucky';
+      } else if (tickets < 70) {
+        luckMessage = '⚪ Normal luck.';
+        luckLevel = lang === 'zh' ? '正常' : 'Normal';
+      } else {
+        if (previousWasNormal) {
+          luckMessage = '✅ Guaranteed Event after Normal. 🔁 Reset.';
+          previousWasNormal = false;
+          luckLevel = lang === 'zh' ? '保底出活动卡' : 'Guaranteed Event';
+        } else {
+          luckMessage = '⚠️ Event 5★ at pity.';
+          luckLevel = lang === 'zh' ? '活动卡保底' : 'At Pity';
+        }
+      }
+    } else if (cardType === 'normal') {
+      resultChar = normalChar || '—';
+      previousWasNormal = true;
+      if (tickets < 70) {
+        luckMessage = '🟠 Normal 5★ early — not great.';
+        luckLevel = lang === 'zh' ? '歪了' : 'Unlucky';
+      } else {
+        luckMessage = '🔴 Very unlucky! Got Normal 5★ at pity.';
+        luckLevel = lang === 'zh' ? '大歪' : 'Very Unlucky';
+      }
+    }
+
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `
+      <p><strong>${t.th[1]}:</strong> ${event}</p>
+      <p><strong>${t.th[2]}:</strong> ${eventChar}</p>
+      <p><strong>${t.th[3]}:</strong> ${resultChar}</p>
+      <p><strong>${t.th[4]}:</strong> ${tickets}</p>
+      <p><strong>${t.th[5]}:</strong> ${t.cardLabels[cardType]}</p>
+      <p class="luck">${luckMessage}</p>
+    `;
+
+    const drawRecord = {
+      date, event, eventChar, resultChar, tickets, cardType, luckLevel
+    };
+
+    history.push(drawRecord);
+    localStorage.setItem('luckHistory', JSON.stringify(history));
+    addToTable(drawRecord);
+    form.reset();
+    normalCharSelect.style.display = "none";
+  });
+
+  function addToTable(draw) {
+    const lang = langSelect.value;
+    const t = translations[lang];
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${draw.date}</td>
+      <td>${draw.event}</td>
+      <td>${draw.eventChar}</td>
+      <td>${draw.resultChar}</td>
+      <td>${draw.tickets}</td>
+      <td>${t.cardLabels[draw.cardType] || 'None'}</td>
+      <td>${draw.luckLevel}</td>
+    `;
+    tableBody.appendChild(row);
+  }
+
+  function clearHistory() {
+    if (confirm("Are you sure you want to clear all records?")) {
+      localStorage.removeItem('luckHistory');
+      tableBody.innerHTML = '';
+      history = [];
+      resultDiv.style.display = 'none';
+    }
+  }
+</script>
+
+</body>
+</html>
